@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>PassDN Completed Orders Dashboard</title>
+<style>
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th, td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+th {
+  background-color: #f2f2f2;
+}
+</style>
+</head>
+<body>
+  <h1>Completed Orders</h1>
+  <div id="order-table">
+    <table>
+      <thead>
+        <tr>
+          <th>Order ID</th>
+          <th>Buyer Email</th>
+          <th>Total Amount</th>
+          <th>Completed At</th>
+        </tr>
+      </thead>
+      <tbody>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+const apiKey = "YOUR_API_KEY";
+const apiUrl = "https://buyer.passdn.com/getCompleted";
+
+const orderTable = document.querySelector("#order-table tbody");
+
+fetch(apiUrl, {
+  headers: {
+    "Authorization": `Bearer ${apiKey}`
+  }
+})
+.then(response => response.json())
+.then(data => {
+  data.forEach(order => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${order.orderId}</td>
+      <td>${order.buyerEmail}</td>
+      <td>${order.totalAmount}</td>
+      <td>${order.completedAt}</td>
+    `;
+    orderTable.appendChild(row);
+  });
+})
+.catch(error => {
+  console.error("Error fetching data:", error);
+});
+  </script>
+</body>
+</html>
