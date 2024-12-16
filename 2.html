@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ride History Dashboard</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+        .loading {
+      text-align: center;
+      font-style: italic;
+      color: #888;
+    }
+        #search-input {
+        margin-bottom: 10px;
+        padding: 8px;
+        border: 1px solid #ddd;
+    }
+    </style>
+</head>
+
+<body>
+    <h1>Ride History Dashboard</h1>
+
+    <p class="loading" id="loading-message">Loading data...</p>
+    <input type="text" id="search-input" placeholder="Search...">
+    <label>
+    <input type="checkbox" id="toggleTransaction"> Show Transaction ID
+</label>
+    <table id="rideTable" style="display: none;">
+        <thead>
+            <tr>
+                <th data-column="transaction">Transaction ID</th>
+                <th>User</th>
+                <th>Coins</th>
+                <th>Credit</th>
+                <th>Payout</th>
+                <th>Driver</th>
+                <th>Fare</th>
+                <th>Start Time</th>
+                <th>End Time</th>
+                <th>Duration</th>
+
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            <!-- Data will be inserted here -->
+        </tbody>
+    </table>
+
+    <script>
+       const apiURL = 'https://buyer.passdn.com/getCompleted';
+        const tableBody = document.getElementById('tableBody');
+        const rideTable = document.getElementById('rideTable');
+        const loadingMessage = document.getElementById('loading-message');
+        const searchInput = document.getElementById('search-input');
+        const toggleTransaction = document.getElementById('toggleTransaction');
+        let originalData = [];
+    
+      
+        function filterTable() {
+          const searchText = searchInput.value.toLowerCase();
+          tableBody.innerHTML = "";
+           const filteredData = originalData.filter(ride =>
+                 Object.values(ride).join(" ").toLowerCase().includes(searchText));
+
+          filteredData.forEach(ride => {
+             const startTime = new Date(ride.createdAt).toLocaleString();
+                    const endTime = new Date(ride.updatedAt).toLocaleString();
+                      const driverName = ride.driverDetails && ride.driverDetails[0] ? ride.driverDetails[0].name : 'N/A';
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                       <td data-column="transaction">${ride.transaction_id}</td>
+                        <td>${ride.user.name} ${ride.user.lastname}</td>
+                        <td>${ride.user.coins}</td>
+                        <td>${ride.isCoinsCredit}</td>
+                        <td>${ride.payout.length > 0 ? 'Available' : 'N/A'}</td>
+                        <td>${driverName}</td>
+                        <td>${ride.fare}</td>
+                        <td>${startTime}</td>
+                        <td>${endTime}</td>
+                           <td>${ride.durationInMinutes}</td>
+
+                    `;
+                    tableBody.appendChild(row);
+            });
+             toggleTransactionColumn();
+        }
+        
+    
+    function toggleTransactionColumn(){
+          const transactionColumns = document.querySelectorAll('td[data-column="transaction"], th[data-column="transaction"]');
+          transactionColumns.forEach(column => {
+        column.style.display = toggleTransaction.checked ? '' : 'none';
+      });
+    }
+
+
+        fetch(apiURL)
+            .then(response => response.json())
+            .then(data => {
+                console.log("data",data);
+                originalData = data.ridesWithDetails
+                loadingMessage.style.display = 'none';
+                 rideTable.style.display = 'table';
+                data.ridesWithDetails.forEach(ride => {
+                    const startTime = new Date(ride.createdAt).toLocaleString();
+                    const endTime = new Date(ride.updatedAt).toLocaleString();
+                      const driverName = ride.driverDetails && ride.driverDetails[0] ? ride.driverDetails[0].name : 'N/A';
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                       <td data-column="transaction">${ride.transaction_id}</td>
+                        <td>${ride.user.name} ${ride.user.lastname}</td>
+                        <td>${ride.user.coins}</td>
+                        <td>${ride.isCoinsCredit}</td>
+                        <td>${ride.payout.length > 0 ? 'Available' : 'N/A'}</td>
+                        <td>${driverName}</td>
+                        <td>${ride.fare}</td>
+                        <td>${startTime}</td>
+                        <td>${endTime}</td>
+                           <td>${ride.durationInMinutes}</td>
+
+                    `;
+                    tableBody.appendChild(row);
+                });
+                  toggleTransactionColumn();
+                 searchInput.addEventListener('input', filterTable);
+                   toggleTransaction.addEventListener('change', toggleTransactionColumn);
+            })
+            .catch(error => {
+                loadingMessage.textContent = 'Error loading data. Please try again.';
+                 console.error("Error fetching data", error);
+            });
+    </script>
+
+</body>
+
+</html>

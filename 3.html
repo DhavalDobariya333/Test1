@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ride History Dashboard</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            cursor: pointer;
+            position: relative; /* For filter input positioning */
+        }
+
+        th.asc::after {
+            content: "▲";
+            float: right;
+        }
+
+        th.desc::after {
+            content: "▼";
+            float: right;
+        }
+
+        .loading {
+            text-align: center;
+            font-style: italic;
+            color: #888;
+        }
+
+        #search-input {
+            margin-bottom: 10px;
+            padding: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .column-filter {
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 5px;
+            padding: 4px;
+             display: none; /* Hide by default */
+        }
+
+         .show-filters{
+           display:block;
+          }
+    </style>
+</head>
+
+<body>
+    <h1>Ride History Dashboard</h1>
+    <p class="loading" id="loading-message">Loading data...</p>
+    <input type="text" id="search-input" placeholder="Search...">
+    <label>
+        <input type="checkbox" id="toggleTransaction"> Show Transaction ID
+    </label>
+
+    <label>
+        <input type="checkbox" id="toggleFilters"> Show Filters
+    </label>
+
+    <table id="rideTable" style="display: none;">
+        <thead>
+        <tr>
+                <th data-column="transaction">Transaction ID <input type="text" class="column-filter" data-filter-column="transaction"></th>
+                <th data-column="user">User <input type="text" class="column-filter" data-filter-column="user"></th>
+                <th data-column="coins">Coins <input type="text" class="column-filter" data-filter-column="coins"></th>
+                <th data-column="credit">Credit <input type="text" class="column-filter" data-filter-column="credit"></th>
+                <th data-column="payout">Payout <input type="text" class="column-filter" data-filter-column="payout"></th>
+                <th data-column="driver">Driver <input type="text" class="column-filter" data-filter-column="driver"></th>
+                <th data-column="fare">Fare <input type="text" class="column-filter" data-filter-column="fare"></th>
+                <th data-column="start">Start Time <input type="text" class="column-filter" data-filter-column="start"></th>
+                <th data-column="end">End Time <input type="text" class="column-filter" data-filter-column="end"></th>
+                <th data-column="duration">Duration <input type="text" class="column-filter" data-filter-column="duration"></th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            <!-- Data will be inserted here -->
+        </tbody>
+    </table>
+
+    <script>
+       const apiURL = 'https://buyer.passdn.com/getCompleted';
+        const tableBody = document.getElementById('tableBody');
+        const rideTable = document.getElementById('rideTable');
+        const loadingMessage = document.getElementById('loading-message');
+        const searchInput = document.getElementById('search-input');
+        const toggleTransaction = document.getElementById('toggleTransaction');
+          const toggleFilters = document.getElementById('toggleFilters');
+        let originalData = [];
+        let currentSortColumn = null;
+        let currentSortDirection = 'asc';
+           let columnFilters = {};
+
+      function toggleTransactionColumn() {
+            const transactionColumns = document.querySelectorAll('td[data-column="transaction"], th[data-column="transaction"]');
+            transactionColumns.forEach(column => {
+                column.style.display = toggleTransaction.checked ? '' : 'none';
+            });
+        }
+
+
+         function toggleColumnFilters(){
+           const columnFilters = document.querySelectorAll(".column-filter");
+           columnFilters.forEach(filterInput =>{
+              filterInput.classList.toggle("show-filters", toggleFilters.checked)
+           });
+         }
+
+
+
+        function sortTable(column) {
+            if (column === currentSortColumn) {
+                currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortColumn = column;
+                currentSortDirection = 'asc';
+            }
+            const sortHeaders = document.querySelectorAll("th[data-column]");
+            sortHeaders.forEach(header => {
+                header.classList.remove("asc", "desc");
+            });
+            const currentHeader = document.querySelector(`th[data-column="${currentSortColumn}"]`);
+            currentHeader.classList.add(currentSortDirection);
+
+            const sortedData = [...originalData].sort((a, b) => {
+                let aValue = getCellValue(a, column);
+                let bValue = getCellValue(b, column);
+
+               if (typeof aValue === 'string' && typeof bValue === 'string') {
+                  aValue = aValue.toLowerCase();
+                  bValue = bValue.toLowerCase();
+               }
+                 if (typeof aValue === 'number' && typeof bValue === 'number'){
+                  return currentSortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+                 }
+                if (aValue < bValue) return currentSortDirection === 'asc' ? -1 : 1;
+                if (aValue > bValue) return currentSortDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
+            renderTable(applyFilters(sortedData));
+        }
+
+       function applyFilters(data) {
+        return data.filter(row => {
+            for (const column in columnFilters) {
+               if(columnFilters[column] !== ''){
+                let cellValue = getCellValue(row, column);
+                if(cellValue == null){
+                  return false
+                }
+                 if(typeof cellValue === 'number'){
+                   cellValue = String(cellValue);
+                 }
+                  if (typeof cellValue === 'string') {
+                     cellValue = cellValue.toLowerCase();
+                    if (!cellValue.includes(columnFilters[column].toLowerCase())) {
+                         return false;
+                       }
+                  }
+                  }
+               }
+            return true;
+           });
+       }
+
+
+        function getCellValue(row, column) {
+            switch (column) {
+                case 'transaction':
+                    return row.transaction_id;
+                case 'user':
+                    return `${row.user.name} ${row.user.lastname}`;
+                case 'coins':
+                   return row.user.coins;
+                case 'credit':
+                    return row.isCoinsCredit;
+                case 'payout':
+                    return row.payout.length > 0 ? 'Available' : 'N/A';
+                case 'driver':
+                    return row.driverDetails && row.driverDetails[0] ? row.driverDetails[0].name : 'N/A';
+                case 'fare':
+                    return  parseFloat(row.fare);
+                case 'start':
+                    return new Date(row.createdAt).toLocaleString();
+                case 'end':
+                    return new Date(row.updatedAt).toLocaleString();
+                case 'duration':
+                   return parseFloat(row.durationInMinutes);
+                default:
+                    return null;
+            }
+        }
+
+        function filterTable() {
+            const searchText = searchInput.value.toLowerCase();
+            const filteredData = originalData.filter(ride => {
+                const rowString = Object.values(ride).join(" ").toLowerCase();
+                return rowString.includes(searchText)
+            });
+            renderTable(applyFilters(filteredData));
+        }
+
+        function renderTable(data) {
+            tableBody.innerHTML = "";
+            data.forEach(ride => {
+                const startTime = new Date(ride.createdAt).toLocaleString();
+                const endTime = new Date(ride.updatedAt).toLocaleString();
+                const driverName = ride.driverDetails && ride.driverDetails[0] ? ride.driverDetails[0].name : 'N/A';
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                     <td data-column="transaction">${ride.transaction_id}</td>
+                      <td>${ride.user.name} ${ride.user.lastname}</td>
+                      <td>${ride.user.coins}</td>
+                      <td>${ride.isCoinsCredit}</td>
+                      <td>${ride.payout.length > 0 ? 'Available' : 'N/A'}</td>
+                      <td>${driverName}</td>
+                       <td>${ride.fare}</td>
+                       <td>${startTime}</td>
+                       <td>${endTime}</td>
+                        <td>${ride.durationInMinutes}</td>
+                  `;
+                tableBody.appendChild(row);
+            });
+            toggleTransactionColumn();
+        }
+
+
+        fetch(apiURL)
+            .then(response => response.json())
+            .then(data => {
+                originalData = data.ridesWithDetails;
+                loadingMessage.style.display = 'none';
+                rideTable.style.display = 'table';
+                renderTable(originalData);
+                const sortHeaders = document.querySelectorAll("th[data-column]");
+                sortHeaders.forEach(header => {
+                    header.addEventListener("click", () => sortTable(header.dataset.column));
+                });
+                toggleTransactionColumn();
+                  toggleColumnFilters();
+                searchInput.addEventListener('input', filterTable);
+                toggleTransaction.addEventListener('change', toggleTransactionColumn);
+                   toggleFilters.addEventListener('change', toggleColumnFilters);
+
+                // Column filter event listeners
+               const filterInputs = document.querySelectorAll('.column-filter');
+                 filterInputs.forEach(input =>{
+                   input.addEventListener('input', function (){
+                      columnFilters[this.dataset.filterColumn] = this.value;
+                       renderTable(applyFilters([...originalData]));
+                   });
+
+                 });
+            })
+            .catch(error => {
+                loadingMessage.textContent = 'Error loading data. Please try again.';
+                console.error("Error fetching data", error);
+            });
+    </script>
+
+</body>
+
+</html>

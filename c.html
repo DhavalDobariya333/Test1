@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ride History Dashboard</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            cursor: pointer;
+        }
+
+        th.asc::after {
+            content: "▲";
+            float: right;
+        }
+
+        th.desc::after {
+            content: "▼";
+            float: right;
+        }
+
+        .loading {
+            text-align: center;
+            font-style: italic;
+            color: #888;
+        }
+
+        #search-input {
+            margin-bottom: 10px;
+            padding: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .filter-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .filter-container select {
+            padding: 8px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Ride History Dashboard</h1>
+    <p class="loading" id="loading-message">Loading data...</p>
+    <div class="filter-container">
+        <input type="text" id="search-input" placeholder="Search...">
+        <label>
+            <input type="checkbox" id="toggleTransaction"> Show Transaction ID
+        </label>
+        <select id="column-filter">
+            <option value="">All Columns</option>
+        </select>
+    </div>
+
+    <table id="rideTable" style="display: none;">
+        <thead>
+            <tr>
+                <th data-column="transaction">Transaction ID</th>
+                <th data-column="user">User</th>
+                <th data-column="coins">Coins</th>
+                <th data-column="credit">Credit</th>
+                <th data-column="payout">Payout</th>
+                <th data-column="driver">Driver</th>
+                <th data-column="fare">Fare</th>
+                <th data-column="start">Start Time</th>
+                <th data-column="end">End Time</th>
+                <th data-column="duration">Duration</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            <!-- Data will be inserted here -->
+        </tbody>
+    </table>
+
+    <script>
+        const apiURL = 'https://buyer.passdn.com/getCompleted';
+        const tableBody = document.getElementById('tableBody');
+        const rideTable = document.getElementById('rideTable');
+        const loadingMessage = document.getElementById('loading-message');
+        const searchInput = document.getElementById('search-input');
+        const toggleTransaction = document.getElementById('toggleTransaction');
+        const columnFilter = document.getElementById('column-filter');
+        let originalData = [];
+        let currentSortColumn = null;
+        let currentSortDirection = 'asc';
+        let filteredData = null;
+
+        function toggleTransactionColumn() {
+            const transactionColumns = document.querySelectorAll('td[data-column="transaction"], th[data-column="transaction"]');
+            transactionColumns.forEach(column => {
+                column.style.display = toggleTransaction.checked ? '' : 'none';
+            });
+        }
+
+        function sortTable(column) {
+            if (column === currentSortColumn) {
+                currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortColumn = column;
+                currentSortDirection = 'asc';
+            }
+
+            const sortHeaders = document.querySelectorAll("th[data-column]");
+            sortHeaders.forEach(header => {
+                header.classList.remove("asc", "desc");
+            });
+
+            const currentHeader = document.querySelector(`th[data-column="${currentSortColumn}"]`);
+            currentHeader.classList.add(currentSortDirection);
+
+            const sortedData = [...originalData].sort((a, b) => {
+                let aValue = getCellValue(a, column);
+                let bValue = getCellValue(b, column);
+
+                if (typeof aValue === 'string' && typeof bValue === 'string') {
+                    aValue = aValue.toLowerCase();
+                    bValue = bValue.toLowerCase();
+                }
+
+                if (!isNaN(aValue) && !isNaN(bValue)) {
+                    aValue = Number(aValue);
+                    bValue = Number(bValue);
+                }
+
+                if (aValue < bValue) return currentSortDirection === 'asc' ? -1 : 1;
+                if (aValue > bValue) return currentSortDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            renderTable(filteredData || sortedData);
+        }
+
+        function getCellValue(row, column) {
+            switch (column) {
+                case 'transaction':
+                    return row.transaction_id;
+                case 'user':
+                    return `${row.user.name} ${row.user.lastname}`;
+                case 'coins':
+                    return row.user.coins;
+                case 'credit':
+                    return row.isCoinsCredit;
+                case 'payout':
+                    return row.payout.length > 0 ? 'Available' : 'N/A';
+                case 'driver':
+                    return row.driverDetails && row.driverDetails[0] ? row.driverDetails[0].name : 'N/A';
+                case 'fare':
+                    return row.fare;
+                case 'start':
+                    return new Date(row.createdAt).toLocaleString();
+                case 'end':
+                    return new Date(row.updatedAt).toLocaleString();
+                case 'duration':
+                    return row.durationInMinutes;
+                default:
+                    return '';
+            }
+        }
+
+        function filterTable() {
+            const searchText = searchInput.value.toLowerCase();
+            const selectedColumn = columnFilter.value;
+
+            filteredData = originalData.filter(ride => {
+                if (selectedColumn) {
+                    const cellValue = getCellValue(ride, selectedColumn);
+                    return cellValue && cellValue.toString().toLowerCase().includes(searchText);
+                } else {
+                    const rowString = Object.values(ride).join(" ").toLowerCase();
+                    return rowString.includes(searchText);
+                }
+            });
+
+            renderTable(filteredData);
+        }
+
+        function renderTable(data) {
+            tableBody.innerHTML = "";
+            data.forEach(ride => {
+                const startTime = new Date(ride.createdAt).toLocaleString();
+                const endTime = new Date(ride.updatedAt).toLocaleString();
+                const driverName = ride.driverDetails && ride.driverDetails[0] ? ride.driverDetails[0].name : 'N/A';
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td data-column="transaction">${ride.transaction_id}</td>
+                    <td>${ride.user.name} ${ride.user.lastname}</td>
+                    <td>${ride.user.coins}</td>
+                    <td>${ride.isCoinsCredit}</td>
+                    <td>${ride.payout.length > 0 ? 'Available' : 'N/A'}</td>
+                    <td>${driverName}</td>
+                    <td>${ride.fare}</td>
+                    <td>${startTime}</td>
+                    <td>${endTime}</td>
+                    <td>${ride.durationInMinutes}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+            toggleTransactionColumn();
+        }
+
+        fetch(apiURL)
+            .then(response => response.json())
+            .then(data => {
+                originalData = data.ridesWithDetails;
+                loadingMessage.style.display = 'none';
+                rideTable.style.display = 'table';
+                renderTable(originalData);
+
+                const sortHeaders = document.querySelectorAll("th[data-column]");
+                sortHeaders.forEach(header => {
+                    header.addEventListener("click", () => sortTable(header.dataset.column));
+                });
+
+                const columns = document.querySelectorAll("th[data-column]");
+                columns.forEach(column => {
+                    const option = document.createElement("option");
+                    option.value = column.dataset.column;
+                    option.textContent = column.textContent;
+                    columnFilter.appendChild(option);
+                });
+
+                toggleTransactionColumn();
+                searchInput.addEventListener('input', filterTable);
+                columnFilter.addEventListener('change', filterTable);
+                toggleTransaction.addEventListener('change', toggleTransactionColumn);
+            })
+            .catch(error => {
+                loadingMessage.textContent = 'Error loading data. Please try again.';
+                console.error("Error fetching data", error);
+            });
+    </script>
+</body>
+
+</html>
