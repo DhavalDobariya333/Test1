@@ -27,6 +27,7 @@
         th {
             background-color: #f2f2f2;
             cursor: pointer;
+            position: relative;
         }
 
         th.asc::after {
@@ -51,15 +52,20 @@
             border: 1px solid #ddd;
         }
 
-        .filter-container {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
+        .column-filter {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            border: 1px solid #ddd;
+            background-color: #fff;
+            padding: 5px;
+            z-index: 1;
+            display: none;
         }
 
-        .filter-container select {
-            padding: 8px;
-            border: 1px solid #ddd;
+        th:hover .column-filter {
+            display: block;
         }
     </style>
 </head>
@@ -67,29 +73,64 @@
 <body>
     <h1>Ride History Dashboard</h1>
     <p class="loading" id="loading-message">Loading data...</p>
-    <div class="filter-container">
-        <input type="text" id="search-input" placeholder="Search...">
-        <label>
-            <input type="checkbox" id="toggleTransaction"> Show Transaction ID
-        </label>
-        <select id="column-filter">
-            <option value="">All Columns</option>
-        </select>
-    </div>
+    <input type="text" id="search-input" placeholder="Search...">
+    <label>
+        <input type="checkbox" id="toggleTransaction"> Show Transaction ID
+    </label>
 
     <table id="rideTable" style="display: none;">
         <thead>
             <tr>
-                <th data-column="transaction">Transaction ID</th>
-                <th data-column="user">User</th>
-                <th data-column="coins">Coins</th>
-                <th data-column="credit">Credit</th>
-                <th data-column="payout">Payout</th>
-                <th data-column="driver">Driver</th>
-                <th data-column="fare">Fare</th>
-                <th data-column="start">Start Time</th>
-                <th data-column="end">End Time</th>
-                <th data-column="duration">Duration</th>
+                <th data-column="transaction">Transaction ID
+                    <div class="column-filter">
+                        <input type="text" data-filter="transaction" placeholder="Filter Transaction">
+                    </div>
+                </th>
+                <th data-column="user">User
+                    <div class="column-filter">
+                        <input type="text" data-filter="user" placeholder="Filter User">
+                    </div>
+                </th>
+                <th data-column="coins">Coins
+                    <div class="column-filter">
+                        <input type="text" data-filter="coins" placeholder="Filter Coins">
+                    </div>
+                </th>
+                <th data-column="credit">Credit
+                    <div class="column-filter">
+                        <input type="text" data-filter="credit" placeholder="Filter Credit">
+                    </div>
+                </th>
+                <th data-column="payout">Payout
+                    <div class="column-filter">
+                        <input type="text" data-filter="payout" placeholder="Filter Payout">
+                    </div>
+                </th>
+                <th data-column="driver">Driver
+                    <div class="column-filter">
+                        <input type="text" data-filter="driver" placeholder="Filter Driver">
+                    </div>
+                </th>
+                <th data-column="fare">Fare
+                    <div class="column-filter">
+                        <input type="text" data-filter="fare" placeholder="Filter Fare">
+                    </div>
+                </th>
+                <th data-column="start">Start Time
+                    <div class="column-filter">
+                        <input type="text" data-filter="start" placeholder="Filter Start Time">
+                    </div>
+                </th>
+                <th data-column="end">End Time
+                    <div class="column-filter">
+                        <input type="text" data-filter="end" placeholder="Filter End Time">
+                    </div>
+                </th>
+                <th data-column="duration">Duration
+                    <div class="column-filter">
+                        <input type="text" data-filter="duration" placeholder="Filter Duration">
+                    </div>
+                </th>
             </tr>
         </thead>
         <tbody id="tableBody">
@@ -104,11 +145,9 @@
         const loadingMessage = document.getElementById('loading-message');
         const searchInput = document.getElementById('search-input');
         const toggleTransaction = document.getElementById('toggleTransaction');
-        const columnFilter = document.getElementById('column-filter');
         let originalData = [];
         let currentSortColumn = null;
         let currentSortDirection = 'asc';
-        let filteredData = null;
 
         function toggleTransactionColumn() {
             const transactionColumns = document.querySelectorAll('td[data-column="transaction"], th[data-column="transaction"]');
@@ -152,7 +191,7 @@
                 return 0;
             });
 
-            renderTable(filteredData || sortedData);
+            renderTable(sortedData);
         }
 
         function getCellValue(row, column) {
@@ -182,21 +221,25 @@
             }
         }
 
-        function filterTable() {
-            const searchText = searchInput.value.toLowerCase();
-            const selectedColumn = columnFilter.value;
-
-            filteredData = originalData.filter(ride => {
-                if (selectedColumn) {
-                    const cellValue = getCellValue(ride, selectedColumn);
-                    return cellValue && cellValue.toString().toLowerCase().includes(searchText);
-                } else {
-                    const rowString = Object.values(ride).join(" ").toLowerCase();
-                    return rowString.includes(searchText);
-                }
+        function filterTableByColumn(column, value) {
+            const filteredData = originalData.filter(row => {
+                const cellValue = getCellValue(row, column);
+                return cellValue && cellValue.toString().toLowerCase().includes(value.toLowerCase());
             });
 
             renderTable(filteredData);
+        }
+
+        function attachColumnFilters() {
+            const filterInputs = document.querySelectorAll('.column-filter input');
+
+            filterInputs.forEach(input => {
+                input.addEventListener('input', (event) => {
+                    const column = event.target.dataset.filter;
+                    const value = event.target.value;
+                    filterTableByColumn(column, value);
+                });
+            });
         }
 
         function renderTable(data) {
@@ -204,57 +247,3 @@
             data.forEach(ride => {
                 const startTime = new Date(ride.createdAt).toLocaleString();
                 const endTime = new Date(ride.updatedAt).toLocaleString();
-                const driverName = ride.driverDetails && ride.driverDetails[0] ? ride.driverDetails[0].name : 'N/A';
-
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td data-column="transaction">${ride.transaction_id}</td>
-                    <td>${ride.user.name} ${ride.user.lastname}</td>
-                    <td>${ride.user.coins}</td>
-                    <td>${ride.isCoinsCredit}</td>
-                    <td>${ride.payout.length > 0 ? 'Available' : 'N/A'}</td>
-                    <td>${driverName}</td>
-                    <td>${ride.fare}</td>
-                    <td>${startTime}</td>
-                    <td>${endTime}</td>
-                    <td>${ride.durationInMinutes}</td>
-                `;
-                tableBody.appendChild(row);
-            });
-            toggleTransactionColumn();
-        }
-
-        fetch(apiURL)
-            .then(response => response.json())
-            .then(data => {
-                originalData = data.ridesWithDetails;
-                loadingMessage.style.display = 'none';
-                rideTable.style.display = 'table';
-                renderTable(originalData);
-
-                const sortHeaders = document.querySelectorAll("th[data-column]");
-                sortHeaders.forEach(header => {
-                    header.addEventListener("click", () => sortTable(header.dataset.column));
-                });
-
-                const columns = document.querySelectorAll("th[data-column]");
-                columns.forEach(column => {
-                    const option = document.createElement("option");
-                    option.value = column.dataset.column;
-                    option.textContent = column.textContent;
-                    columnFilter.appendChild(option);
-                });
-
-                toggleTransactionColumn();
-                searchInput.addEventListener('input', filterTable);
-                columnFilter.addEventListener('change', filterTable);
-                toggleTransaction.addEventListener('change', toggleTransactionColumn);
-            })
-            .catch(error => {
-                loadingMessage.textContent = 'Error loading data. Please try again.';
-                console.error("Error fetching data", error);
-            });
-    </script>
-</body>
-
-</html>

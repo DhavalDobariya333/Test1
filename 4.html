@@ -52,16 +52,34 @@
             margin-bottom: 5px;
             padding: 4px;
         }
+
+        .plus-icon {
+            cursor: pointer;
+            color: blue;
+            font-size: 1.2em; /* Make the icon slightly larger */
+            position: absolute;
+            right: 10px; /* Right-align the icon */
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        td[data-column="coins"] {
+            position: relative; /* Ensure the cell can position the icon absolutely */
+        }
     </style>
 </head>
 
 <body>
-    
+    <!-- <h1>Ride History Dashboard</h1> -->
     <p class="loading" id="loading-message">Loading data...</p>
-    <label>
-        <input type="checkbox" id="toggleTransaction"> Show Transaction ID
-    </label>
-
+    <div> 
+        <label>
+            <input type="checkbox" id="toggleTransaction"> Show Transaction ID                                             
+        </label>
+        <div style="text-align: right;">
+            <b>{Zoom Out for Better View 👌}</b>
+        </div>
+        
     <table id="rideTable" style="display: none;">
         <thead>
         <tr>
@@ -166,7 +184,7 @@
                 case 'credit':
                     return row.isCoinsCredit;
                 case 'payout':
-                    return row.payout.length > 0 ? 'Available' : 'N/A';
+                    return row.payout.length > 0 ? row.payout[0]?.coins : 'N/A';
                 case 'driver':
                     return row.driverDetails && row.driverDetails[0] ? `${row.driverDetails[0].name} (${row.driverDetails[0].phone})` : 'N/A';
                 case 'fare':
@@ -193,9 +211,9 @@
                 row.innerHTML = `
                      <td data-column="transaction">${ride.transaction_id}</td>
                       <td>${ride.user.name} ${ride.user.lastname} (${ride.user.phone})</td>
-                      <td>${ride.user.coins}</td>
-                      <td>${ride.isCoinsCredit== null ? 0 : ride.isCoinsCredit.coins}</td>
-                      <td>${ride.payout.length > 0 ? ride.payout[0].coins:  0}</td>
+                      <td data-column="coins">${ride.user.coins} <span class="plus-icon" data-user-id="${ride.userId}" data-transaction-id="${ride.transaction_id}">+</span></td>
+                      <td>${ride.isCoinsCredit == null ? 0 : ride.isCoinsCredit.coins}</td>
+                      <td>${ride.payout.length > 0 ? ride.payout[0].coins : 0}</td>
                       <td>${driverName}</td>
                        <td>${ride.fare}</td>
                        <td>${startTime}</td>
@@ -206,6 +224,46 @@
             });
             toggleTransactionColumn();
         }
+
+        function addCoins(userId, transactionId) {
+            const coinsToAdd = prompt("Enter the number of coins to add:");
+            if (coinsToAdd !== null) {
+                fetch("https://buyer.passdn.com/addCoins", {
+                    "headers": {
+                        "accept": "*/*",
+                        "accept-language": "en-US,en;q=0.9",
+                        "content-type": "application/x-www-form-urlencoded; charset=utf-8",
+                        "priority": "u=1, i",
+                        "sec-ch-ua": "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+                        "sec-ch-ua-mobile": "?0",
+                        "sec-ch-ua-platform": "\"Windows\"",
+                        "sec-fetch-dest": "empty",
+                        "sec-fetch-mode": "cors",
+                        "sec-fetch-site": "cross-site",
+                        "Referer": "https://dashboard-vayu.web.app/",
+                        "Referrer-Policy": "strict-origin-when-cross-origin"
+                    },
+                    "body": `transactionId=${transactionId}&id=${userId}&coins=${coinsToAdd}`,
+                    "method": "POST"
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Coins added successfully:", data);
+                    // Optionally, you can update the table or show a success message
+                })
+                .catch(error => {
+                    console.error("Error adding coins:", error);
+                });
+            }
+        }
+
+        document.addEventListener('click', function(event) {
+            if (event.target && event.target.classList.contains('plus-icon')) {
+                const userId = event.target.dataset.userId;
+                const transactionId = event.target.dataset.transactionId;
+                addCoins(userId, transactionId);
+            }
+        });
 
         fetch(apiURL)
             .then(response => response.json())
